@@ -4,7 +4,8 @@
   "description": "Api for Automata",
   "main": "index.js",
   "scripts": {
-    "start": "DEBUG=automata,Plugin:*,api node index.js"
+    "start": "DEBUG=automata,Plugin:*,-Plugin:*:trace,api node index.js",
+    "debug": "DEBUG=automata,Plugin:*,api node index.js"
   },
   "author": "David Young <ohnoitsyou7043@gmail.com>",
   "license": "ISC",
@@ -12,6 +13,7 @@
     "async": "^2.0.0-rc.3",
     "automata-plugin": "git://github.com/ohnoitsyou/automata-plugin.git",
     "config": "^1.20.1",
+    "cors": "^2.7.1",
     "debug": "^2.2.0",
     "express": "^4.13.4",
     "particle-api-js": "^5.2.7",
