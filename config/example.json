@@ -1,0 +1,9 @@
+{
+  "api": {
+    "port": 3000
+  },
+  "particle" : {
+    "particleUsername": "",
+    "particlePassword": ""
+  }
+}
