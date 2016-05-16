@@ -1,5 +1,5 @@
 {
-  "api": {
+  "api" : {
     "port": 3000
   },
   "particle" : {
