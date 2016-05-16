@@ -99,7 +99,11 @@ class ParticleManager extends Plugin {
       if(knownDevices.hasOwnProperty(device)) {
         var obj = {deviceId: knownDevices[device].id, name: variable, auth: accessToken}
         trace('getVariable: device: %s : variable %s', device, variable)
-        return particle.getVariable(obj)
+        return particle.getVariable(obj).then((result) => {
+          return Promise.resolve(result.body.result)
+        }).catch((error) => {
+          return Promise.reject(new Error(`Unable to retrieve variable: ${variable}:` +  error))
+        })
       } else {
         debug("Unknown device: %s", device)
         return Promise.reject(`Unknown device: ${device}`)
