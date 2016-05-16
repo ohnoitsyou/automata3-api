@@ -149,8 +149,8 @@ class ParticleManager extends Plugin {
             matches.push(new Promise((resolve, reject) => {
               this.getVariable(device, 'role').then((result) => {
                 trace('Result: %o', result)
-                debug('Matches? %s == %s: %s',result.body.result, role, result.body.result == role)
-                if(result.body.result == role) {
+                debug('Matches? %s == %s: %s',result, role, result == role)
+                if(result == role) {
                   trace('getDevicesByRole: resolving: %s', device)
                   resolve(device)
                 } else {
