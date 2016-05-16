@@ -22,7 +22,7 @@ class ParticleManager extends Plugin {
 
   login(username, password) {
     if(accessToken == null) {
-      if(username == undefined || password == undefined) {
+      if(username == undefined || password == undefined || username == '' || password == '') {
         return Promise.reject(new Error('Login failure, Check username and password'))
       }
       return particle.login({username: username, password: password}).then((resp) => {
