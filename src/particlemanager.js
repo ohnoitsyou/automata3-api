@@ -45,7 +45,7 @@ class ParticleManager extends Plugin {
     if(accessToken != null) {
       return particle.listDevices({auth: accessToken}).then((data) => {
         data.body.map((device) => {
-          trace('get-devices device: %0', device)
+          trace('get-devices device: %o', device)
           if(knownDevices.hasOwnProperty(device.name)) {
             // We know about this device
             //debug("We already know about this device")
