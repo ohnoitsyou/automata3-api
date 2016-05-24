@@ -8,7 +8,8 @@ var util = require('util')
 var deviceRefreshInterval = 60000
 
 var refreshInterval
-var knownDevices = []
+var deviceCache = []
+
 var accessToken = null
 var particle = new Particle
 var version = "0.1.0"
@@ -49,10 +50,10 @@ class ParticleManager extends Plugin {
       return particle.listDevices({auth: accessToken}).then((data) => {
         data.body.map((device) => {
           trace('get-devices device: %o', device)
-          if(knownDevices.hasOwnProperty(device.name)) {
+          if(deviceCache.hasOwnProperty(device.name)) {
             // We know about this device
             //debug("We already know about this device")
-            if(knownDevices[device.name].connected != device.connected) {
+            if(deviceCache[device.name].connected != device.connected) {
               // it's state has changed
               debug("Device %s has gone %s", device.name,
                   device.connected ? "online" : "offline")
@@ -60,11 +61,11 @@ class ParticleManager extends Plugin {
               this.emit('device-changed-state', device.name)
             }
             // update the stored object with the new one
-            knownDevices[device.name] = device
+            deviceCache[device.name] = device
           } else {
             // we haven't seen this device before, add it to the list
             debug("New %s device: %s", device.connected ? "online" : "offline", device.name)
-            knownDevices[device.name] = device
+            deviceCache[device.name] = device
             trace('new-device: %s : %s', device.name, device.connected)
             this.emit('new-device', device.name, device.connected)
           }
@@ -81,9 +82,9 @@ class ParticleManager extends Plugin {
 
   callFunction(device, fn, args) {
     if(accessToken != null) {
-      if(knownDevices.hasOwnProperty(device)) {
+      if(deviceCache.hasOwnProperty(device)) {
         // The name is valid
-        var obj = {deviceId: knownDevices[device].id, name: fn, argument: args, auth: accessToken}
+        var obj = {deviceId: deviceCache[device].id, name: fn, argument: args, auth: accessToken}
         trace('callFunction: Calling: %s : Arguments: %s', fn.name, args)
         return particle.callFunction(obj)
       } else {
@@ -99,8 +100,8 @@ class ParticleManager extends Plugin {
   getVariable(device, variable) {
     debug('getVariable: %s : %s', device, variable)
     if(accessToken != null) {
-      if(knownDevices.hasOwnProperty(device)) {
-        var obj = {deviceId: knownDevices[device].id, name: variable, auth: accessToken}
+      if(deviceCache.hasOwnProperty(device)) {
+        var obj = {deviceId: deviceCache[device].id, name: variable, auth: accessToken}
         trace('getVariable: device: %s : variable %s', device, variable)
         return particle.getVariable(obj).then((result) => {
           return Promise.resolve(result.body.result)
@@ -117,9 +118,9 @@ class ParticleManager extends Plugin {
   }
 
   deviceStatus(device) {
-    if(knownDevices.hasOwnProperty(device)) {
-      trace('deviceStatus: device: %s : status: %s', device, knownDevices[device].connected)
-      return Promise.resolve(knownDevices[device].connected)
+    if(deviceCache.hasOwnProperty(device)) {
+      trace('deviceStatus: device: %s : status: %s', device, deviceCache[device].connected)
+      return Promise.resolve(deviceCache[device].connected)
     } else {
       debug('deviceStatus: rejecting %s as unknown device', device)
       return Promise.reject(new Error(`Unknown device: ${device}`))
@@ -129,7 +130,7 @@ class ParticleManager extends Plugin {
   /**
    * At the moment, this is a useless function...I'll actually utilize it later
   deviceRole(device) {
-    if(knownDevices.hasOwnProperty(device)) {
+    if(deviceCache.hasOwnProperty(device)) {
       return this.deviceStatus().then((connected) => {
         trace('deviceRole: Resolving %s : %s', device, connected)
         return Promise.resolve(connected)
@@ -145,13 +146,13 @@ class ParticleManager extends Plugin {
     debug('getDevicesByRole: Starting')
     if(accessToken != null) {
       trace('getDevicesByRole: AccessToken is good')
-      var numDevices = (Object.keys(knownDevices).length)
+      var numDevices = (Object.keys(deviceCache).length)
       if(numDevices > 0) {
         trace('getDevicesByRole: We have known devices: %s', numDevices) 
         var matches = []
-        for(let device in knownDevices) {
+        for(let device in deviceCache) {
           trace('getDevicesByRole: inside the map: %s', device)
-          if(knownDevices[device].connected) {
+          if(deviceCache[device].connected) {
             debug('device %s is online, checking role', device)
             matches.push(new Promise((resolve, reject) => {
               this.getVariable(device, 'role').then((result) => {
@@ -180,7 +181,7 @@ class ParticleManager extends Plugin {
           })
         })
       } else {
-        trace('getDevicesByRole: No known devices: %s', (Object.keys(knownDevices)).length)
+        trace('getDevicesByRole: No known devices: %s', (Object.keys(deviceCache)).length)
         return Promise.reject(new Error('No known devices, please wait until devices have been enumerated'))
       }
     } else {
