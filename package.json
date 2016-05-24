@@ -12,6 +12,7 @@
   "dependencies": {
     "async": "^2.0.0-rc.3",
     "automata-plugin": "git://github.com/ohnoitsyou/automata-plugin.git",
+    "body-parser": "^1.15.1",
     "config": "^1.20.1",
     "cors": "^2.7.1",
     "debug": "^2.2.0",
