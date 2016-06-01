@@ -9,7 +9,7 @@ var deviceRefreshInterval = 60000
 
 var refreshInterval
 var deviceCache = []
-
+var roleCache = []
 var accessToken = null
 var particle = new Particle
 var version = "0.1.0"
@@ -21,6 +21,8 @@ class ParticleManager extends Plugin {
     return this
   }
 
+  // Refactor to use the eventstream that the api provides
+  //   Listen for device on/offline events and then requery devices
   login(username, password) {
     if(accessToken == null) {
       if(username == undefined || password == undefined || username == '' || password == '') {
@@ -29,13 +31,13 @@ class ParticleManager extends Plugin {
       return particle.login({username: username, password: password}).then((resp) => {
         accessToken = resp.body.access_token
         debug('Login success, Access token: %s', accessToken)
-        this.getDevices()
-        refreshInterval = setInterval((this.getDevices).bind(this),deviceRefreshInterval)
+        this.cacheDevices()
+        refreshInterval = setInterval((this.cacheDevices).bind(this),deviceRefreshInterval)
         trace('Emitting: login-success')
         this.emit('login-success')
         return Promise.resolve('Login success')
       }).catch((error) => {
-        debug('login failure: %s', error)
+        debug('login failure: %o', error)
         trace('Emitting: login-failure')
         this.emit('login-failure')
         return Promise.reject(new Error('Login failure, Check username and password'))
@@ -45,10 +47,11 @@ class ParticleManager extends Plugin {
     }
   }
 
-  getDevices() {
+  /*
+  cacheDevices() {
     if(accessToken != null) {
       return particle.listDevices({auth: accessToken}).then((data) => {
-        data.body.map((device) => {
+        return data.body.map((device) => {
           trace('get-devices device: %o', device)
           if(deviceCache.hasOwnProperty(device.name)) {
             // We know about this device
@@ -69,16 +72,105 @@ class ParticleManager extends Plugin {
             trace('new-device: %s : %s', device.name, device.connected)
             this.emit('new-device', device.name, device.connected)
           }
+          return device
         })
+      }).then((devices) => {
+        devices.map((device) => {
+          this.getVariable(device.name, 'role').then((result) => {
+            roleCache[device.name] = result;
+            trace(roleCache[device.name])
+          }).catch((error) => {
+            trace(error)
+          })
+        })
+      }).then(() => {
+        trace('DONE: %o', roleCache)
       }).then(() => {
         trace('Emitting: devices-ready')
         this.emit('devices-ready')
+        return Promize.resolve('devices-ready')
       })
     } else {
       debug("Not logged in, check username and password")
       return Promise.reject(new Error('Not logged in, check username and password'))
     }
   }
+  */
+	cacheDevices() {
+		if(accessToken != null) {
+			return particle.listDevices({auth: accessToken})
+				.then((data) => {
+					//cache devices
+					return Promise.all(data.body.map((device) => {
+						if(deviceCache.hasOwnProperty(device.name)) {
+							if(deviceCache[device.name].connected != device.connected) {
+								debug("Device %s has gone %s", device.name,
+									device.connected ? "online" : "offline")
+								trace('Emitting: device-changed-state')
+								this.emit('device-changed-state', device.name)
+							}   
+							// store the updated state
+							deviceCache[device.name] = device
+						} else {
+							// we haven't yet seen this device
+							debug('New %s device: %s', device.connected ? 'online' : 'offline', device.name)
+							deviceCache[device.name] = device
+							trace('Emitting: new-device')
+							this.emit('new-device', device.name, device.connected)
+						}   
+						trace('Resolving: %o', device)
+						return Promise.resolve(device)
+					})) 
+				})  
+        .then((devices) => {
+          // we only want devices that are online
+          return devices.filter((device) => {
+            return device.connected == true
+          })
+        })
+				.then((devices) => {
+					// get the roles
+					return Promise.all(devices.map((device) => {
+            return this.getVariable(device.name, 'role').then((result) => {
+              trace('map: %s : result : %s', device.name, result)
+              return Promise.resolve({'name': device.name,'role': result});
+            }).catch((result) => {
+              return Promise.resolve();
+            })
+					})) 
+				})  
+        .then((devices) => {
+          // filtering block
+          return devices.filter((device) => {
+            trace('filter: %o', device)
+            return device != undefined
+          })
+        })
+        .then((devices) => {
+          // do the role caching
+          return Promise.all(devices.map((device) => {
+            trace('roleCache: name: %s, role: %s', device.name, device.role)
+            roleCache[device.name] = device
+            trace('stored roleCache: %o', roleCache[device.name])
+            return Promise.resolve(device)
+          }))
+        })
+				.then((devices) => {
+					// debugging
+          trace('debugging block: %o', devices)
+          trace('device cache: %o', deviceCache)
+          trace('role cache: %o', roleCache)
+          return 
+				})  
+				.then(() => {
+					// emitting
+          trace('emitting block')
+          trace('Emitting: devices-ready')
+          this.emit('devices-ready')
+          return Promize.resolve('devices-ready')
+				})  
+		}
+	}
 
   callFunction(device, fn, args) {
     if(accessToken != null) {
@@ -141,52 +233,21 @@ class ParticleManager extends Plugin {
     }
   }
   */
+  getRoleOfDevice(device) {
+    return Promise.all(roleCaache.filter((device) => {
+      return device.name == device
+    })).then((device) => {
+      return device.role
+    })
+  }
 
   getDevicesByRole(role) {
-    debug('getDevicesByRole: Starting')
-    if(accessToken != null) {
-      trace('getDevicesByRole: AccessToken is good')
-      var numDevices = (Object.keys(deviceCache).length)
-      if(numDevices > 0) {
-        trace('getDevicesByRole: We have known devices: %s', numDevices) 
-        var matches = []
-        for(let device in deviceCache) {
-          trace('getDevicesByRole: inside the map: %s', device)
-          if(deviceCache[device].connected) {
-            debug('device %s is online, checking role', device)
-            matches.push(new Promise((resolve, reject) => {
-              this.getVariable(device, 'role').then((result) => {
-                trace('Result: %o', result)
-                debug('Matches? %s == %s: %s',result, role, result == role)
-                if(result == role) {
-                  trace('getDevicesByRole: resolving: %s', device)
-                  resolve(device)
-                } else {
-                  // it doesn't match, but we cant reject
-                  trace('getDevicesByRole: doesn\'t mach, resolve empty: %s', device)
-                  resolve()
-                }
-              }).catch((err) => {
-                // resolve it as empty so it returns, we will filter later
-                trace('getDevicesByRole: resolve empty: %s', device)
-                resolve()
-              })
-            }))
-          } 
-        }
-        return Promise.all(matches).then((matches) => {
-          return matches.filter((device) => {
-            trace('getDevicesByRole: filtering %s', device)
-            return device != undefined
-          })
-        })
-      } else {
-        trace('getDevicesByRole: No known devices: %s', (Object.keys(deviceCache)).length)
-        return Promise.reject(new Error('No known devices, please wait until devices have been enumerated'))
-      }
-    } else {
-      return Promise.reject(new Error('Not logged in, check username and password'))
-    }
+    debug('getting devicesByRole: %s', role)
+    debug('roleCache: %o', roleCache)
+    return roleCache.map((device) => {
+      trace('device: %o', device)
+      return device
+    })
   }
 }
 
